@@ -1,7 +1,7 @@
 import socket
-import subprocess
 import sys
 import threading
+import rsa
 
 def recieve_messages(sock):
     while True:
