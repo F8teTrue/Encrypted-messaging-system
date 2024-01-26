@@ -1,54 +1,87 @@
 import socket
-import sys
 import threading
 import rsa
 
-def recieve_messages(sock):
+def receive_messages(sock, sender):
     while True:
-        data, addr = sock.recvfrom(1024)
-        data = data.decode("utf-8")
-        print(f'Recieved from {addr}: {data}')
+        try:
+            data = sock.recv(1024)
+            if not data:
+                print(f'Connection with {sender} closed.')
+                break
+            data = data.decode("utf-8")
+            print(f'Received from {sender}: {data}')
+        except OSError as e:
+            if e.errno == 9:
+                print("Connection closed.")
+                break
+            else:
+                raise
+    sock.close()
 
-def server():
-    host = "127.0.0.1"
+def send_messages(sock):
+    while True:
+        try:
+            message = input("-> ")
+            if message.lower() == "exit":
+                print("Closing connection.")
+                sock.close()
+                break
+            sock.send(message.encode('utf-8'))
+        except OSError as e:
+            if e.errno == 9:
+                print("Connection closed.")
+                break
+            else:
+                raise
+
+
+hosting = input("Do you want to host (1) or connect (2): ")
+
+if hosting == "1":
+    host = "0.0.0.0"
     port = 4000
 
-    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    s.bind((host, port))
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 
+    s.bind((host, port))
+    s.listen()
     print("Server started")
+    print('"exit" to close.')
 
-    recieve_thread = threading.Thread(target = recieve_messages, args = (s,))
-    recieve_thread.start()
 
-    while True:
-        message = input("-> ")
-        s.sendto(message.encode('utf-8'), ('127.0.0.1', 4005))
+    c, _ = s.accept()
 
-def client():
-    host = "127.0.0.1"
-    port = 4005
+    receive_thread = threading.Thread(target=receive_messages, args=(c, "client"))
+    send_thread = threading.Thread(target=send_messages, args=(c,))
 
-    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    s.bind((host, port))
+    receive_thread.start()
+    send_thread.start()
 
-    recieve_thread = threading.Thread(target = recieve_messages, args = (s,))
-    recieve_thread.start()
+    receive_thread.join()
+    send_thread.join()
+    c.close()
+    s.close()
 
-    while True:
-        message = input("-> ")
-        s.sendto(message.encode('utf-8'), ('127.0.0.1', 4000))
+elif hosting == "2":
+    client = "10.58.176.2"
+    port = 4000
 
-if __name__ == '__main__':
-    if len(sys.argv) != 2:
-        print("Usage: python Main.py host|client")
-        sys.exit(1)
+    c = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    c.connect((client, port))
 
-    if sys.argv[1] == 'host':
-        server()
-    elif sys.argv[1] == 'client':
-        client()
-    else:
-        print("Invalid argument. Use 'host' or 'client'.")
+    print("Connected to host.")
+    print('"exit" to close.')
+
+    receive_thread = threading.Thread(target=receive_messages, args=(c, "host"))
+    send_thread = threading.Thread(target=send_messages, args=(c,))
+
+    receive_thread.start()
+    send_thread.start()
+
+else:
+    print("Not a valid choice. Try again.")
+    exit()
 
 
