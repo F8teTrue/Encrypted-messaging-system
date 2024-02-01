@@ -8,11 +8,10 @@ def receive_messages(sock, sender):
     """
     while True:
         try:
-            data = sock.recv(1024) # This is listening for incomming data on the socket
+            data = rsa.decrypt(sock.recv(1024), private_key).decode('UTF-8') # This is listening for incomming data on the socket and decrypts it.
             if not data:
                 print(f'Connection with {sender} closed.')
                 break
-            data = data.decode("utf-8")
             print(f'Received from {sender}: {data}')
 
             # If an error occurs the socket is closed.
@@ -35,7 +34,7 @@ def send_messages(sock):
                 print("Closing connection.")
                 sock.close()
                 break
-            sock.send(message.encode('utf-8'))
+            sock.send(rsa.encrypt(message.encode('utf-8'), public_partner)) # This encrypts the message using partners public key and sends it to the connected socket.
 
             # Same again. If an error occurs the socket is closed.
         except OSError as e:
@@ -45,6 +44,8 @@ def send_messages(sock):
             else:
                 raise
 
+public_key, private_key = rsa.newkeys(1024) # Generates key pair for encryption and decryption
+public_partner = None
 
 hosting = input("Do you want to host (1) or connect (2): ")
 
@@ -67,6 +68,10 @@ if hosting == "1":
 
     c, _ = s.accept()
 
+    # Sends own public key to partner and revieves partners public key
+    c.send(public_key.save_pkcs1("PEM"))
+    public_partner = rsa.PublicKey.load_pkcs1(c.recv(1024))
+
 # This starts 2 threads, 1 for recieving messages and one for sending messages.
     receive_thread = threading.Thread(target=receive_messages, args=(c, "client"))
     send_thread = threading.Thread(target=send_messages, args=(c,))
@@ -88,6 +93,10 @@ elif hosting == "2":
 
     c = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     c.connect((server, port))
+    
+    # Again sends own public key to partner and revieves partners public key
+    public_partner = rsa.PublicKey.load_pkcs1(c.recv(1024))
+    c.send(public_key.save_pkcs1("PEM"))
 
     print("Connected to host.")
     print('"exit" to close.')
