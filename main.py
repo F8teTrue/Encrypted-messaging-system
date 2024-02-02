@@ -13,8 +13,13 @@ def receive_messages(sock, sender):
                 print(f'Connection with {sender} closed.')
                 break
             print(f'Received from {sender}: {data}')
+        
+        # When partner exits you get a decryption error and instead the following is printed.
+        except rsa.DecryptionError:
+            print('Partner has disconnected. Press enter to close.')
+            break
 
-            # If an error occurs the socket is closed.
+        # If an error occurs the socket is closed.
         except OSError as e: 
             if e.errno == 9:
                 print("Connection closed.")
@@ -67,6 +72,7 @@ if hosting == "1":
 
 
     c, _ = s.accept()
+    print("Client connected")
 
     # Sends own public key to partner and revieves partners public key
     c.send(public_key.save_pkcs1("PEM"))
