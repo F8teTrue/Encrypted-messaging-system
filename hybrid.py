@@ -1,6 +1,30 @@
 import socket
 import threading
 import rsa
+from Crypto.Cipher import AES
+from secrets import token_bytes
+import pickle
+
+def encrypt_aes(msg, key):
+    """
+    Kryptheierer meldingen med bruk av AES.
+    """
+    cipher = AES.new(key, AES.MODE_EAX)
+    nonce = cipher.nonce
+    cipherText, tag = cipher.encrypt_and_digest(msg.encode('utf-8'))
+    return nonce, cipherText, tag
+
+def decrypt_aes(nonce,cipherText, tag, key):
+    """
+    Dekrypterer meldingen med bruk av AES.
+    """
+    cipher = AES.new(key, AES.MODE_EAX, nonce=nonce)
+    plainText = cipher.decrypt(cipherText)
+    try:
+        cipher.verify(tag)
+        return plainText.decode('utf-8')
+    except:
+        return False
 
 def receive_messages(sock, sender):
     """
@@ -8,24 +32,30 @@ def receive_messages(sock, sender):
     """
     while True:
         try:
-            data = rsa.decrypt(sock.recv(1024), private_key).decode('UTF-8') # This is listening for incomming data on the socket and decrypts it.
+            data = sock.recv(2048)
             if not data:
+                print(f'Connection with {sender} closed. \n "exit" to close.')
+                break
+            encrypted_aes_key, nonce, cipherText, tag = pickle.loads(data)
+            aes_key = rsa.decrypt(encrypted_aes_key, private_key)
+            message = decrypt_aes(nonce, cipherText, tag, aes_key)
+
+            if not message:
                 print(f'Connection with {sender} closed.')
                 break
-            print(f'Received from {sender}: {data}')
+            print(f'Received from {sender}: {message}')
         
-        # When partner exits you get a decryption error and instead the following is printed.
         except rsa.DecryptionError:
-            print('DECRYPTION ERROR! Press ctrl+c to close.')
+            print("DECRYPTION ERROR! Press ctrl + c to exit.")
             break
-
-        # If an error occurs the socket is closed.
-        except OSError as e: 
+        except OSError as e:
             if e.errno == 9:
-                print("Connection closed.")
                 break
             else:
                 raise
+        except KeyboardInterrupt:
+            print('Connection closed.')
+            break
     sock.close()
 
 def send_messages(sock):
@@ -36,21 +66,35 @@ def send_messages(sock):
         try:
             message = input("-> ")
             if message.lower() == "exit":
-                print("Closing connection.")
+                print('Connection closed.')
                 sock.close()
                 break
-            sock.send(rsa.encrypt(message.encode('utf-8'), public_partner)) # This encrypts the message using partners public key and sends it to the connected socket.
 
-            # Same again. If an error occurs the socket is closed.
+            if not message.strip():
+                print('Message cannot be empty.')
+                continue
+
+            # Creates a new AES key for each message and encrypts the message with it.
+            aes_key = token_bytes(24)
+            nonce, cipherText, tag = encrypt_aes(message, aes_key)
+            encrypted_aes_key = rsa.encrypt(aes_key, public_partner)
+
+            # Serialize the tuple to a byte stream using pickle, then sends it over the socket.
+            data = pickle.dumps((encrypted_aes_key, nonce, cipherText, tag))
+            sock.send(data)
+
         except OSError as e:
             if e.errno == 9:
-                print("Connection closed.")
+                print('An error has occured.')
+                print('Connection closed. \n "exit" to close.')
                 break
             else:
                 raise
 
-public_key, private_key = rsa.newkeys(2048) # Generates key pair for encryption and decryption
-public_partner = None
+
+
+public_key, private_key = rsa.newkeys(1024) # Generates a RSA key pair for encryption and decryption of the AES key.
+public_partner = None 
 
 hosting = input("Do you want to host (1) or connect (2): ")
 
@@ -69,6 +113,7 @@ if hosting == "1":
     s.listen()
     print("Server started")
     print('"exit" to close.')
+    print("Pasting messages might crash the program. Limit for message is terminal limit - 1 character.")
 
 
     c, _ = s.accept()
@@ -106,6 +151,7 @@ elif hosting == "2":
 
     print("Connected to host.")
     print('"exit" to close.')
+    print("ctrl + v might crash the program. Limit for message is terminal limit - 1 character.")
 
 # Same as the host with starting the 2 threads for recieving and sending messages.
     receive_thread = threading.Thread(target=receive_messages, args=(c, "host"))
