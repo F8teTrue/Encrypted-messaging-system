@@ -2,7 +2,7 @@
 An encrypted chat in Python using AES and RSA.
 
 ## Pip installations
-** This project uses Python 3.11**
+**This project uses Python 3.11**
 
 * RSA for encrypting AES key
 ```bash
