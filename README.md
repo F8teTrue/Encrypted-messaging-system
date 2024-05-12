@@ -16,10 +16,14 @@ pip install PyCryptodome
 ## Usage
 To run host (You might not need the 3.11):
 ```bash
-python3.11 host.py
+python3.11 hybrid.py
 ```
+**Then select 1**
+
 To run client:
 ```bash
-python3.11 client.py
+python3.11 hybrid.py
 ```
+**Then select 2**
+
 You will also need to specify the server's IP in the code for client
