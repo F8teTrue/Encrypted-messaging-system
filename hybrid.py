@@ -139,7 +139,7 @@ if hosting == "1":
 elif hosting == "2":
 # The client creates a socket and connects to the host using the hosts IP and the chosen port.
 
-    server = "10.58.176.2"
+    server = "127.0.0.1"
     port = 4000
 
     c = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
